@@ -8,6 +8,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 add_executable(${PROJECT_NAME} "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp"
+                               "${CMAKE_CURRENT_SOURCE_DIR}/include/MainTexasWindow.hpp"
                                "${CMAKE_CURRENT_SOURCE_DIR}/src/MainTexasWindow.cpp"
                                "${CMAKE_CURRENT_SOURCE_DIR}/include/ImageTab.hpp"
                                "${CMAKE_CURRENT_SOURCE_DIR}/src/ImageTab.cpp")

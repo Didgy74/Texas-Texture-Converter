@@ -1,25 +1,39 @@
 #pragma once
 
 #include <QMainWindow>
+#include <QList>
 
-class QTabWidget;
+class QTabBar;
+class QStackedLayout;
 
-class MainTexasWindow : public QMainWindow
+namespace TexasGUI
 {
-    Q_OBJECT
+    class ImageTab;
 
-public:
-    MainTexasWindow();
-        
+    class MainTexasWindow : public QMainWindow
+    {
+        Q_OBJECT
 
-public slots:
-    void openFile();
+    public:
+        MainTexasWindow();
+
+
+    public slots:
+        void clickedMenuQuit();
+        void openFile();
+        void tabCloseRequested(int index);
+        void tabSelectedChanged(int index);
+        void tabMoved(int from, int to);
 
     signals:
 
-private:
-    void setImage(const QImage& newImage);
-    bool loadFile(const QString&);
+    private:
 
-    QTabWidget* mainTabWidget = nullptr;
-};
+        QWidget* tabsStackWidget = nullptr;
+        QStackedLayout* tabsStackLayout = nullptr;
+        QList<ImageTab*> imageTabWidgets;
+
+        QTabBar* tabBar = nullptr;
+    };
+}
+

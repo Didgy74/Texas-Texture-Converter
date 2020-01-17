@@ -1,0 +1,26 @@
+* { 
+	color: rgb(220, 220, 220); 
+	background: rgb(50, 50, 50); 
+}
+
+QMenuBar {
+	background: rgb(50, 50, 50);
+}
+
+QMenuBar::item:selected, QMenu::item:selected {
+	background: rgb(100, 100, 100);
+}
+
+QWidget#noTabSpace {
+	background: rgb(10, 10, 10);
+}
+
+QTabBar::tab:selected { 
+	color: rgb(220, 220, 220); 
+	background: rgb(50, 50, 50); 
+} 
+
+QTabBar::tab:!selected { 
+	color: rgb(100, 100, 100); 
+	background: rgb(20, 20, 20); 
+}
