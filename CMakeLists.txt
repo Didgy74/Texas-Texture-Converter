@@ -9,12 +9,13 @@ set(CMAKE_AUTOUIC ON)
 
 add_executable(${PROJECT_NAME} "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp"
                                "${CMAKE_CURRENT_SOURCE_DIR}/include/MainTexasWindow.hpp"
-                               "${CMAKE_CURRENT_SOURCE_DIR}/src/MainTexasWindow.cpp"
                                "${CMAKE_CURRENT_SOURCE_DIR}/include/ImageTab.hpp"
+                               "${CMAKE_CURRENT_SOURCE_DIR}/src/MainTexasWindow.cpp"
                                "${CMAKE_CURRENT_SOURCE_DIR}/src/ImageTab.cpp")
 target_include_directories(${PROJECT_NAME} PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 set(Qt5_DIR "C:/Qt/5.12.6/msvc2017_64/lib/cmake/Qt5")
+#set(Qt5_DIR "C:/Qt/5.12.6/msvc2017/lib/cmake/Qt5")
 find_package(Qt5 COMPONENTS Widgets REQUIRED)
 target_link_libraries(${PROJECT_NAME} Qt5::Widgets)
 

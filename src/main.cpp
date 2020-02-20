@@ -8,13 +8,17 @@
 
 #include "MainTexasWindow.hpp"
 
+#include "Texas/Texas.hpp"
+
+#include <limits>
+
 int main(int argc, char** argv)
 {
     QApplication app(argc, argv);
     QCoreApplication::setOrganizationName("Nils Petter Skålerud");
     QCoreApplication::setApplicationName("Texas Texture Converter");
     QCoreApplication::setApplicationVersion("0.1");
-    
+    /*
     std::ifstream file("Dark stylesheet.txt", std::fstream::ate);
     if (!file.is_open())
     {
@@ -31,6 +35,7 @@ int main(int argc, char** argv)
     file.read(fileString.data(), fileSize);
 
     qApp->setStyleSheet(QString::fromStdString(fileString));
+    */
     
 
     TexasGUI::MainTexasWindow* mainWindow = new TexasGUI::MainTexasWindow;
@@ -38,4 +43,5 @@ int main(int argc, char** argv)
     mainWindow->show();
 
     return app.exec();
+    
 }

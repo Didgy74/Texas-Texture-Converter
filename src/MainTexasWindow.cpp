@@ -1,8 +1,10 @@
 #include "MainTexasWindow.hpp"
 
 #include "ImageTab.hpp"
+#include "TexasGUI/Utilities.hpp"
 
 #include "Texas/Texas.hpp"
+#include "Texas/Tools.hpp"
 
 #include <QBoxLayout>
 #include <QMenuBar>
@@ -102,10 +104,8 @@ void TexasGUI::MainTexasWindow::openFile()
     if (dialogResult == QDialog::Accepted)
     {
         QString fileName = fileDialog.selectedFiles().first();
-
         QFile file = QFile(fileName);
         file.open(QFile::ReadOnly);
-
         if (!file.isOpen())
         {
             QMessageBox msgBox;
@@ -117,70 +117,22 @@ void TexasGUI::MainTexasWindow::openFile()
         QByteArray fileBuffer = file.readAll();
 
         Texas::ConstByteSpan fileBufferSpan = { reinterpret_cast<const std::byte*>(fileBuffer.constData()), static_cast<std::size_t>(fileBuffer.size()) };
-        Texas::LoadResult<Texas::MemReqs> parseFileResult = Texas::getMemReqs(fileBufferSpan);
-        if (!parseFileResult.isSuccessful())
+        Texas::ResultValue<Texas::Texture> loadResult = Texas::loadFromBuffer(fileBufferSpan);
+        if (!loadResult.isSuccessful())
         {
-            QMessageBox msgBox;
-            switch (parseFileResult.resultType())
-            {
-            case Texas::ResultType::CorruptFileData:
-                msgBox.setText("This image file is corrupt.");
-                break;
-            case Texas::ResultType::FileNotSupported:
-                msgBox.setText("Texas does not support this file.");
-                break;
-            default:
-                break;
-            }
-            
-            if (parseFileResult.errorMessage() != nullptr)
-                msgBox.setInformativeText(parseFileResult.errorMessage());
-            
-            msgBox.exec();
+            // We couldnt load this file
+            TexasGUI::Utils::displayErrorBox("Unable to load this file.", loadResult.errorMessage());
             return;
         }
+        
+        Texas::Texture texture = static_cast<Texas::Texture&&>(loadResult.value());
 
-        Texas::MemReqs texMemReqs = parseFileResult.value();
+        TexasGUI::ImageTab* imageTabWidget = new TexasGUI::ImageTab(file.fileName(), static_cast<Texas::Texture&&>(texture));
 
-        QByteArray dstImageBuffer = QByteArray(texMemReqs.memoryRequired(), 0);
-        QByteArray workingMem{};
-
-        Texas::ByteSpan texasDstBuffer = { reinterpret_cast<std::byte*>(dstImageBuffer.data()), static_cast<std::size_t>(dstImageBuffer.size()) };
-        Texas::ByteSpan texasWorkingMem{};
-        if (texMemReqs.workingMemoryRequired() > 0)
-        {
-            workingMem = QByteArray(texMemReqs.workingMemoryRequired(), 0);
-            texasWorkingMem = { reinterpret_cast<std::byte*>(workingMem.data()), static_cast<std::size_t>(workingMem.size()) };
-        }
-        Texas::Result loadFileResult = Texas::loadImageData(texMemReqs, texasDstBuffer, texasWorkingMem);
-        if (!loadFileResult.isSuccessful())
-        {
-            QMessageBox msgBox;
-            switch (loadFileResult.resultType())
-            {
-            case Texas::ResultType::CorruptFileData:
-                msgBox.setText("This image file is corrupt.");
-                break;
-            case Texas::ResultType::FileNotSupported:
-                msgBox.setText("Texas does not support this file.");
-                break;
-            default:
-                break;
-            }
-
-            if (loadFileResult.errorMessage() != nullptr)
-                msgBox.setInformativeText(loadFileResult.errorMessage());
-
-            msgBox.exec();
-            return;
-        }
-
-        TexasGUI::ImageTab* imageTabWidget = new TexasGUI::ImageTab(texMemReqs.metaData(), file.fileName(), static_cast<QByteArray&&>(dstImageBuffer));
+        int newIndex = this->tabsStackLayout->addWidget(imageTabWidget);
 
         QFileInfo fileInfo = QFileInfo(file);
-
         tabBar->addTab(fileInfo.fileName());
-        int newIndex = this->tabsStackLayout->addWidget(imageTabWidget);
         this->tabsStackLayout->setCurrentIndex(newIndex);
         this->tabBar->setCurrentIndex(newIndex);
     }
