@@ -115,9 +115,10 @@ void TexasGUI::MainTexasWindow::openFile()
         }
 
         QByteArray fileBuffer = file.readAll();
+        file.close();
 
-        Texas::ConstByteSpan fileBufferSpan = { reinterpret_cast<const std::byte*>(fileBuffer.constData()), static_cast<std::size_t>(fileBuffer.size()) };
-        Texas::ResultValue<Texas::Texture> loadResult = Texas::loadFromBuffer(fileBufferSpan);
+        std::string tempFilePath = fileDialog.selectedFiles().first().toStdString();
+        Texas::ResultValue<Texas::Texture> loadResult = Texas::loadFromPath(tempFilePath.c_str());
         if (!loadResult.isSuccessful())
         {
             // We couldnt load this file
@@ -127,7 +128,8 @@ void TexasGUI::MainTexasWindow::openFile()
         
         Texas::Texture texture = static_cast<Texas::Texture&&>(loadResult.value());
 
-        TexasGUI::ImageTab* imageTabWidget = new TexasGUI::ImageTab(file.fileName(), static_cast<Texas::Texture&&>(texture));
+        //TexasGUI::ImageTab* imageTabWidget = new TexasGUI::ImageTab(file.fileName(), static_cast<Texas::Texture&&>(texture));
+        TexasGUI::ImageTab* imageTabWidget = new TexasGUI::ImageTab("test file name", static_cast<Texas::Texture&&>(texture));
 
         int newIndex = this->tabsStackLayout->addWidget(imageTabWidget);
 

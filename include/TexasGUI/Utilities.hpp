@@ -3,33 +3,33 @@
 #include <QString>
 #include <QMessageBox>
 
-#include "Texas/ResultType.hpp"
+#include "Texas/Result.hpp"
 
 namespace TexasGUI::Utils
 {
-    [[nodiscard]] inline QString toErrorBoxText(Texas::ResultType result)
-    {
-        switch (result)
-        {
-        case Texas::ResultType::CorruptFileData:
-            return "This image file is corrupt.";
-        case Texas::ResultType::FileNotSupported:
-            return "Texas does not support this file.";
-        default:
-            assert(true && "Hit an unhandled case in TexasGUI::toErrorBoxText");
-            return "";
-        }
-    }
+	[[nodiscard]] inline QString toErrorBoxText(Texas::ResultType result)
+	{
+		switch (result)
+		{
+		case Texas::ResultType::CorruptFileData:
+			return "This image file is corrupt.";
+		case Texas::ResultType::FileNotSupported:
+			return "Texas does not support this file.";
+		default:
+			assert(true && "Hit an unhandled case in TexasGUI::toErrorBoxText");
+			return "";
+		}
+	}
 
-    inline void displayErrorBox(QString const& title, QString const& detailedText)
-    {
-        assert(title.size() > 0 && "Tried running TexasGUI::displayErrorBox without any title.");
-        QMessageBox msgBox;
-        msgBox.setText(title);
-        if (detailedText.size() > 0)
-            msgBox.setInformativeText(detailedText);
-        msgBox.exec();
-    }
+	inline void displayErrorBox(QString const& title, QString const& detailedText)
+	{
+		assert(title.size() > 0 && "Tried running TexasGUI::displayErrorBox without any title.");
+		QMessageBox msgBox;
+		msgBox.setText(title);
+		if (detailedText.size() > 0)
+			msgBox.setInformativeText(detailedText);
+		msgBox.exec();
+	}
 
 	[[nodiscard]] inline QString toString(Texas::TextureType in)
 	{
@@ -66,8 +66,6 @@ namespace TexasGUI::Utils
 			return "R_8";
 		case PixelFormat::RG_8:
 			return "RG_8";
-		case PixelFormat::RA_8:
-			return "RA_8";
 		case PixelFormat::RGB_8:
 			return "RGB_8";
 		case PixelFormat::BGR_8:
@@ -81,31 +79,20 @@ namespace TexasGUI::Utils
 			return "R_16";
 		case PixelFormat::RG_16:
 			return "RG_16";
-		case PixelFormat::RA_16:
-			return "RA_16";
 		case PixelFormat::RGB_16:
 			return "RGB_16";
-		case PixelFormat::BGR_16:
 			return "BGR_16";
 		case PixelFormat::RGBA_16:
 			return "RGBA_16";
-		case PixelFormat::BGRA_16:
-			return "BGRA_16";
 
 		case PixelFormat::R_32:
 			return "R_32";
 		case PixelFormat::RG_32:
 			return "RG_32";
-		case PixelFormat::RA_32:
-			return "RA_32";
 		case PixelFormat::RGB_32:
 			return "RGB_32";
-		case PixelFormat::BGR_32:
-			return "BGR_32";
 		case PixelFormat::RGBA_32:
 			return "RGBA_32";
-		case PixelFormat::BGRA_32:
-			return "BGRA_32";
 
 		case PixelFormat::BC1_RGB:
 			return "BC1_RGB";
@@ -176,16 +163,20 @@ namespace TexasGUI::Utils
 		using namespace Texas;
 		switch (in)
 		{
+#ifdef TEXAS_ENABLE_KTX_READ
 		case FileFormat::KTX:
 			return "KTX";
+#endif
+#ifdef TEXAS_ENABLE_PNG_READ
 		case FileFormat::PNG:
 			return "PNG";
+#endif
 		default:
 			return "Error";
 		}
 	}
 
-	[[nodiscard]] inline std::uint_least8_t channelCount(Texas::PixelFormat pFormat)
+	[[nodiscard]] inline std::uint8_t channelCount(Texas::PixelFormat pFormat)
 	{
 		switch (pFormat)
 		{
@@ -194,7 +185,6 @@ namespace TexasGUI::Utils
 		case Texas::PixelFormat::R_32:
 			return 1;
 
-		case Texas::PixelFormat::RA_8:
 		case Texas::PixelFormat::RG_8:
 		case Texas::PixelFormat::RGB_8:
 		case Texas::PixelFormat::BGR_8:
@@ -202,20 +192,14 @@ namespace TexasGUI::Utils
 		case Texas::PixelFormat::BGRA_8:
 
 		
-		case Texas::PixelFormat::RA_16:
 		case Texas::PixelFormat::RG_16:
 		case Texas::PixelFormat::RGB_16:
-		case Texas::PixelFormat::BGR_16:
 		case Texas::PixelFormat::RGBA_16:
-		case Texas::PixelFormat::BGRA_16:
 
 		
 		case Texas::PixelFormat::RG_32:
-		case Texas::PixelFormat::RA_32:
 		case Texas::PixelFormat::RGB_32:
-		case Texas::PixelFormat::BGR_32:
 		case Texas::PixelFormat::RGBA_32:
-		case Texas::PixelFormat::BGRA_32:
 			return 0;
 		}
 
