@@ -55,208 +55,227 @@ namespace TexasGUI
 		}
 	}
 
-	[[nodiscard]] QImage::Format toQImageFormat(Texas::PixelFormat pFormat)
+	template<Texas::PixelFormat pixelFormat, Texas::ChannelType channelType>
+	void FindMinMaxValues_Internal(
+		Texas::TextureInfo texInfo,
+		Texas::ConstByteSpan byteSpan,
+		MinMaxData& minMaxData) = delete;
+
+	template<Texas::PixelFormat pixelFormat, Texas::ChannelType channelType>
+	void BuildDisplayableTexture_Internal(
+		Texas::TextureInfo texInfo,
+		Texas::ConstByteSpan byteSpan,
+		QByteArray& byteArray) = delete;
+
+	template<>
+	void FindMinMaxValues_Internal<Texas::PixelFormat::RGB_8, Texas::ChannelType::UnsignedNormalized>(
+		Texas::TextureInfo texInfo,
+		Texas::ConstByteSpan byteSpan,
+		MinMaxData& minMaxData)
 	{
-		switch (pFormat)
+		minMaxData.mipLevels.resize(texInfo.mipCount);
+		for (auto& mipLevel : minMaxData.mipLevels)
+			mipLevel.layers.resize(texInfo.layerCount);
+		for (uint8_t mipIndex = 0; mipIndex < texInfo.mipCount; mipIndex++)
 		{
-		case Texas::PixelFormat::R_8:
-			return QImage::Format_Grayscale8;
+			auto& mipLevel = minMaxData.mipLevels[mipIndex];
+
+			Texas::Dimensions mipDimensions = Texas::calculateMipDimensions(texInfo.baseDimensions, mipIndex);
+			uint64_t pixelCount = mipDimensions.width * mipDimensions.height * mipDimensions.depth;
+			uint64_t mipMemoryOffset = Texas::calculateMipOffset(texInfo, mipIndex);
+
+			for (uint8_t layerIndex = 0; layerIndex < texInfo.layerCount; layerIndex++)
+			{
+				auto& layer = mipLevel.layers[layerIndex];
+				uint64_t layerMemoryOffset = Texas::calculateLayerOffset(texInfo, mipIndex, layerIndex);
+
+				for (uint8_t i = 0; i < 3; i++)
+				{
+					layer.min_uint64[i] = std::numeric_limits<uint64_t>::max();
+					layer.max_uint64[i] = std::numeric_limits<uint64_t>::min();
+				}
+				layer.min_uint64[3] = 0;
+				layer.max_uint64[3] = 0;
+
+				for (uint64_t pixelIndex = 0; pixelIndex < pixelCount; pixelIndex++)
+				{
+					unsigned char const* srcPixel = (unsigned char const*)byteSpan.data() + mipMemoryOffset + layerMemoryOffset + pixelIndex * 3;
+					for (size_t i = 0; i < 3; i++)
+					{
+						layer.min_uint64[i] = std::min(layer.min_uint64[i], (uint64_t)srcPixel[i]);
+						layer.max_uint64[i] = std::max(layer.min_uint64[i], (uint64_t)srcPixel[i]);
+					}
+				}
+			}
+		}
+	}
+
+	template<>
+	void BuildDisplayableTexture_Internal<Texas::PixelFormat::RGB_8, Texas::ChannelType::UnsignedNormalized>(
+		Texas::TextureInfo texInfo,
+		Texas::ConstByteSpan byteSpan, 
+		QByteArray& byteArray)
+	{
+		Texas::TextureInfo dstTexInfo = texInfo;
+		dstTexInfo.pixelFormat = Texas::PixelFormat::RGBA_8;
+		dstTexInfo.channelType = Texas::ChannelType::UnsignedNormalized;
+		byteArray = QByteArray(Texas::calculateTotalSize(dstTexInfo), Qt::Initialization::Uninitialized);
+		
+		size_t linearLength = texInfo.baseDimensions.width * texInfo.baseDimensions.height;
+		// Copy the three first channels
+		for (size_t pixelIndex = 0; pixelIndex < linearLength; pixelIndex++)
+		{
+			unsigned char const* srcPixel = (unsigned char const*)byteSpan.data() + pixelIndex * 3;
+			unsigned char* dstPixel = (unsigned char*)byteArray.data() + pixelIndex * 4;
+			
+			dstPixel[0] = srcPixel[0];
+			dstPixel[1] = srcPixel[1];
+			dstPixel[2] = srcPixel[2];
+			dstPixel[3] = 255;
+		}
+	}
+
+	template<>
+	void FindMinMaxValues_Internal<Texas::PixelFormat::RGBA_8, Texas::ChannelType::UnsignedNormalized>(
+		Texas::TextureInfo texInfo,
+		Texas::ConstByteSpan byteSpan,
+		MinMaxData& minMaxData)
+	{
+		minMaxData.mipLevels.resize(texInfo.mipCount);
+		for (auto& mipLevel : minMaxData.mipLevels)
+			mipLevel.layers.resize(texInfo.layerCount);
+		for (uint8_t mipIndex = 0; mipIndex < texInfo.mipCount; mipIndex++)
+		{
+			auto& mipLevel = minMaxData.mipLevels[mipIndex];
+
+			Texas::Dimensions mipDimensions = Texas::calculateMipDimensions(texInfo.baseDimensions, mipIndex);
+			uint64_t pixelCount = mipDimensions.width * mipDimensions.height * mipDimensions.depth;
+
+			for (uint8_t layerIndex = 0; layerIndex < texInfo.layerCount; layerIndex++)
+			{
+				auto& layer = mipLevel.layers[layerIndex];
+				uint64_t layerMemoryOffset = Texas::calculateLayerOffset(texInfo, mipIndex, layerIndex);
+
+				for (uint8_t i = 0; i < 4; i++)
+				{
+					layer.min_uint64[i] = std::numeric_limits<uint64_t>::max();
+					layer.max_uint64[i] = std::numeric_limits<uint64_t>::min();
+				}
+
+				for (uint64_t pixelIndex = 0; pixelIndex < pixelCount; pixelIndex++)
+				{
+					unsigned char const* srcPixel = (unsigned char const*)byteSpan.data() + layerMemoryOffset + pixelIndex * 4;
+					for (size_t i = 0; i < 4; i++)
+					{
+						layer.min_uint64[i] = std::min(layer.min_uint64[i], (uint64_t)srcPixel[i]);
+						layer.max_uint64[i] = std::max(layer.max_uint64[i], (uint64_t)srcPixel[i]);
+					}
+				}
+			}
+		}
+	}
+
+	template<>
+	void BuildDisplayableTexture_Internal<Texas::PixelFormat::RGBA_8, Texas::ChannelType::UnsignedNormalized>(
+		Texas::TextureInfo texInfo,
+		Texas::ConstByteSpan byteSpan,
+		QByteArray& byteArray)
+	{
+		Texas::TextureInfo dstTexInfo = texInfo;
+		dstTexInfo.pixelFormat = Texas::PixelFormat::RGBA_8;
+		dstTexInfo.channelType = Texas::ChannelType::UnsignedNormalized;
+		byteArray = QByteArray(Texas::calculateTotalSize(dstTexInfo), Qt::Initialization::Uninitialized);
+
+		for (uint8_t mipIndex = 0; mipIndex < texInfo.mipCount; mipIndex++)
+		{
+			Texas::Dimensions mipDimensions = Texas::calculateMipDimensions(texInfo.baseDimensions, mipIndex);
+			uint64_t pixelCount = mipDimensions.width * mipDimensions.height * mipDimensions.depth;
+
+			for (uint8_t layerIndex = 0; layerIndex < texInfo.layerCount; layerIndex++)
+			{
+				uint64_t srcLayerMemoryOffset = Texas::calculateLayerOffset(texInfo, mipIndex, layerIndex);
+				uint64_t dstLayerMemoryOffset = Texas::calculateLayerOffset(dstTexInfo, mipIndex, layerIndex);
+				for (size_t pixelIndex = 0; pixelIndex < pixelCount; pixelIndex++)
+				{
+					unsigned char const* srcPixel = (unsigned char const*)byteSpan.data() + srcLayerMemoryOffset + pixelIndex * 4;
+					unsigned char* dstPixel = (unsigned char*)byteArray.data() + dstLayerMemoryOffset + pixelIndex * 4;
+
+					dstPixel[0] = srcPixel[0];
+					dstPixel[1] = srcPixel[1];
+					dstPixel[2] = srcPixel[2];
+					dstPixel[3] = srcPixel[3];
+				}
+			}
+		}
+	}
+
+	void FindMinMaxValues(
+		Texas::TextureInfo texInfo,
+		Texas::ConstByteSpan byteSpan,
+		MinMaxData& minMaxData)
+	{
+		switch (texInfo.pixelFormat)
+		{
 		case Texas::PixelFormat::RGB_8:
-			return QImage::Format_RGB888;
-		case Texas::PixelFormat::RGBA_8:
-			return QImage::Format_RGBA8888;
-		default:
-			return QImage::Format_Invalid;
-		}
-	}
-
-	[[nodiscard]] bool canRenderFormatNatively(Texas::PixelFormat pFormat)
-	{
-		return toQImageFormat(pFormat) != QImage::Format_Invalid;
-	}
-
-	[[nodiscard]] bool canDisplayFormat(Texas::PixelFormat pFormat, Texas::ChannelType chType)
-	{
-		if (canRenderFormatNatively(pFormat))
-			return true;
-
-		if (Texas::isCompressed(pFormat))
-			return false;
-
-		if (chType == Texas::ChannelType::SignedFloat)
-			return true;
-
-		return true;
-	}
-
-	[[nodiscard]] std::tuple<Texas::PixelFormat, Texas::ChannelType, Texas::ColorSpace> toDisplayablePixelFormat(
-		Texas::PixelFormat pFormat,
-		Texas::ChannelType chType,
-		Texas::ColorSpace cSpace)
-	{
-		if (cSpace != Texas::ColorSpace::Linear && cSpace != Texas::ColorSpace::sRGB)
-			return {};
-
-		if (chType == Texas::ChannelType::SignedFloat && cSpace == Texas::ColorSpace::Linear)
 		{
-			switch (pFormat)
+			switch (texInfo.channelType)
 			{
-			case Texas::PixelFormat::R_32:
-				return { Texas::PixelFormat::R_8, chType, cSpace };
-			case Texas::PixelFormat::RGB_32:
-				return { Texas::PixelFormat::RGB_8, chType, cSpace };
-			case Texas::PixelFormat::RGBA_32:
-				return { Texas::PixelFormat::RGBA_8, chType, cSpace };
-			}
-		}
-
-		return {};
-	}
-
-	[[nodiscard]] bool canFindMinMaxValues(Texas::PixelFormat pFormat)
-	{
-		if (Texas::isCompressed(pFormat))
-			return false;
-		return true;
-	}
-
-	[[nodiscard]] void testing_findMinMaxValues(Texas::Texture const& texture)
-	{
-		union Test
-		{
-			std::int64_t m_int = -1;
-			std::uint64_t m_uint;
-			double m_double;
-		};
-
-		Test maxValues[4] = {};
-		Test minValues[4] = {};
-
-		for (unsigned int i = 0; i < 4; i += 1)
-		{
-			switch (texture.channelType())
-			{
-			case Texas::ChannelType::SignedFloat:
-				maxValues[i].m_double = std::numeric_limits<double>::min();
-				minValues[i].m_double = std::numeric_limits<double>::max();
 			case Texas::ChannelType::UnsignedNormalized:
-				maxValues[i].m_uint = std::numeric_limits<std::uint64_t>::min();
-				minValues[i].m_uint = std::numeric_limits<std::uint64_t>::max();
+				FindMinMaxValues_Internal<Texas::PixelFormat::RGB_8, Texas::ChannelType::UnsignedNormalized>(
+					texInfo,
+					byteSpan,
+					minMaxData);
 			}
+			break;
 		}
-
-		for (std::uint64_t pixelIndex = 0; pixelIndex < texture.baseDimensions().width * texture.baseDimensions().height; pixelIndex += 1)
+		case Texas::PixelFormat::RGBA_8:
 		{
-
+			switch (texInfo.channelType)
+			{
+			case Texas::ChannelType::UnsignedNormalized:
+				FindMinMaxValues_Internal<Texas::PixelFormat::RGBA_8, Texas::ChannelType::UnsignedNormalized>(
+					texInfo,
+					byteSpan,
+					minMaxData);
+			}
+			break;
+		}
+		break;
 		}
 	}
 
-	void convertFloatImageTo8Bit(
-		QByteArray& byteArray, 
-		QImage::Format& qImageFormat,
-		Texas::Texture const& srcTexture, 
-		FloatVisualizationMode visualizationMode)
+	void BuildDisplayableTexture(
+		Texas::TextureInfo texInfo,
+		Texas::ConstByteSpan byteSpan,
+		QByteArray& byteArray)
 	{
-		Texas::PixelFormat targetFormatTemp = Texas::PixelFormat::Invalid;
-		std::uint_least8_t channelCountTemp = 0;
-		switch (srcTexture.pixelFormat())
+		switch (texInfo.pixelFormat)
 		{
-		case Texas::PixelFormat::R_32:
-			targetFormatTemp = Texas::PixelFormat::R_8;
-			channelCountTemp = 1;
-			break;
-		case Texas::PixelFormat::RGB_32:
-			targetFormatTemp = Texas::PixelFormat::RGB_8;
-			channelCountTemp = 3;
-			break;
-		case Texas::PixelFormat::RGBA_32:
-			targetFormatTemp = Texas::PixelFormat::RGBA_8;
-			channelCountTemp = 4;
+		case Texas::PixelFormat::RGB_8:
+		{
+			switch (texInfo.channelType)
+			{
+			case Texas::ChannelType::UnsignedNormalized:
+				BuildDisplayableTexture_Internal<Texas::PixelFormat::RGB_8, Texas::ChannelType::UnsignedNormalized>(
+					texInfo,
+					byteSpan,
+					byteArray);
+			}
 			break;
 		}
-		Texas::PixelFormat const targetFormat = targetFormatTemp;
-		std::uint_least8_t const channelCount = channelCountTemp;
-
-		qImageFormat = toQImageFormat(targetFormat);
-
-		auto const targetSizeRequired = Texas::calculateTotalSize(srcTexture.baseDimensions(), targetFormat, srcTexture.mipCount(), srcTexture.layerCount());
-
-		byteArray.resize(targetSizeRequired);
-
-		Texas::ConstByteSpan srcByteSpan = srcTexture.mipSpan(0);
-		float const* const srcBuffer = reinterpret_cast<float const*>(srcByteSpan.data());
-		unsigned char* const dstBuffer = reinterpret_cast<unsigned char*>(byteArray.data());
-
-		std::size_t const pixelCount = srcTexture.baseDimensions().width * srcTexture.baseDimensions().height;
-
-		if (visualizationMode == FloatVisualizationMode::Remap)
+		case Texas::PixelFormat::RGBA_8:
 		{
-			float maxValue[4] = { std::numeric_limits<float>::min(), std::numeric_limits<float>::min(), std::numeric_limits<float>::min(), std::numeric_limits<float>::min() };
-			float minValue[4] = { std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max() };
-			// Loop over the base mip level and find each channels max values
-			for (std::size_t pixelIndex = 0; pixelIndex < pixelCount; pixelIndex += 1)
+			switch (texInfo.channelType)
 			{
-				for (size_t channelIndex = 0; channelIndex < channelCount; channelIndex += 1)
-				{
-					if (srcBuffer[pixelIndex * channelCount + channelIndex] > maxValue[channelIndex])
-						maxValue[channelIndex] = srcBuffer[pixelIndex * channelCount + channelIndex];
-					else if (srcBuffer[pixelIndex * channelCount + channelIndex] < minValue[channelIndex])
-						minValue[channelIndex] = srcBuffer[pixelIndex * channelCount + channelIndex];
-				}
+			case Texas::ChannelType::UnsignedNormalized:
+				BuildDisplayableTexture_Internal<Texas::PixelFormat::RGBA_8, Texas::ChannelType::UnsignedNormalized>(
+					texInfo,
+					byteSpan,
+					byteArray);
 			}
-
-			// Apply the remapping
-			for (std::size_t pixelIndex = 0; pixelIndex < pixelCount; pixelIndex += 1)
-			{
-				for (size_t channelIndex = 0; channelIndex < channelCount; channelIndex += 1)
-				{
-					float srcValue = srcBuffer[pixelIndex * channelCount + channelIndex];
-
-					dstBuffer[pixelIndex * channelCount + channelIndex] = static_cast<unsigned char>((srcValue - minValue[channelIndex]) / (maxValue[channelIndex] - minValue[channelIndex]) * 255);
-				}
-			}
+			break;
 		}
-		else if (visualizationMode == FloatVisualizationMode::Clamp)
-		{
-			for (std::size_t pixelIndex = 0; pixelIndex < pixelCount; pixelIndex += 1)
-			{
-				for (size_t channelIndex = 0; channelIndex < channelCount; channelIndex += 1)
-				{
-					float value = srcBuffer[pixelIndex * channelCount + channelIndex];
-					if (value > 1.f)
-						value = 1.f;
-					else if (value < 0.f)
-						value = 0.f;
-					dstBuffer[pixelIndex * channelCount + channelIndex] = static_cast<unsigned char>(value * 255);
-				}
-			}
-		}
-	}
-
-	void convertRA8_To_R8(
-		QByteArray& byteArray,
-		QImage::Format& qImageFormat,
-		Texas::Texture const& srcTexture)
-	{
-		qImageFormat = QImage::Format_Grayscale8;
-
-		std::uint64_t customImgDataSize = Texas::calculateTotalSize(
-			srcTexture.baseDimensions(), 
-			Texas::PixelFormat::R_8, 
-			1, 
-			1);
-		byteArray.resize((int)customImgDataSize);
-
-		std::uint64_t const srcRowWidth = srcTexture.baseDimensions().width * 2;
-		std::uint64_t const dstRowWidth = srcTexture.baseDimensions().width;
-		for (std::uint64_t y = 0; y < srcTexture.baseDimensions().height; y += 1)
-		{
-			std::byte const* srcRowStart = srcTexture.layerSpan(0,0).data() + srcRowWidth * y;
-			std::byte* dstRowStart = (std::byte*)byteArray.data() + dstRowWidth * y;
-			for (std::uint64_t x = 0; x < srcTexture.baseDimensions().width; x += 1)
-			{
-				std::memcpy(dstRowStart + x, srcRowStart + (x * 2), 1);
-			}
+		break;
 		}
 	}
 }
@@ -270,10 +289,16 @@ TexasGUI::ImageTab::ImageTab(
 	QHBoxLayout* outerLayout = new QHBoxLayout;
 	this->setLayout(outerLayout);
 
-	// Figure out if we can display the texture
-	bool canDisplay = canDisplayFormat(this->sourceTexture.pixelFormat(), this->sourceTexture.channelType());
+	FindMinMaxValues(
+		this->sourceTexture.textureInfo(),
+		this->sourceTexture.rawBufferSpan(),
+		this->minMaxData);
+	BuildDisplayableTexture(
+		this->sourceTexture.textureInfo(),
+		this->sourceTexture.rawBufferSpan(),
+		this->customImgData);
 
-	this->createLeftPanel(outerLayout, fullPath, canDisplay);
+	this->createLeftPanel(outerLayout, fullPath, true);
 
 	QScrollArea* imageScrollArea = new QScrollArea;
 	outerLayout->addWidget(imageScrollArea);
@@ -281,32 +306,8 @@ TexasGUI::ImageTab::ImageTab(
 	this->imgLabel = new QLabel;
 	imageScrollArea->setWidget(this->imgLabel);
 
-	if (canDisplay)
+	if (true)
 	{
-		// Figure out if we can render the source data
-		if (canRenderFormatNatively(this->sourceTexture.pixelFormat()))
-		{
-			// We can render the source data
-			
-		}
-		else
-		{
-			// We have to convert the source data to a format we can render.
-
-
-			// TODO: Convert RA to just R
-			/*
-			if (this->sourceTexture.pixelFormat() == Texas::PixelFormat::RA_8)
-			{
-				convertRA8_To_R8(this->customImgData, this->qImgFormat, this->sourceTexture);
-			}
-			*/
-			if (this->sourceTexture.channelType() == Texas::ChannelType::SignedFloat)
-			{
-				convertFloatImageTo8Bit(this->customImgData, this->qImgFormat, this->sourceTexture, FloatVisualizationMode(0));
-			}
-		}
-
 		updateImage(0, 0, false);
 	}
 	else
@@ -337,7 +338,11 @@ void TexasGUI::ImageTab::createLeftPanel(QLayout* parentLayout, QString const& f
 
 		if (this->sourceTexture.layerCount() > 1)
 			createArrayControls(outerVLayout);
+
+		createMinMaxBox(outerVLayout);
 	}
+
+	
 
 	createDetailsBox(outerVLayout);
 
@@ -496,6 +501,27 @@ void TexasGUI::ImageTab::createArrayControls(QLayout* parentLayout)
 	QObject::connect(this->arraySelectorSlider, SIGNAL(valueChanged(int)), this, SLOT(arrayLayerSliderChanged(int)));
 }
 
+void TexasGUI::ImageTab::createMinMaxBox(QLayout* parentLayout)
+{
+	QGroupBox* box = new QGroupBox;
+	parentLayout->addWidget(box);
+	box->setTitle("Min/Max");
+
+	QVBoxLayout* innerLayout = new QVBoxLayout;
+	box->setLayout(innerLayout);
+	for (uint8_t i = 0; i < 4; i++)
+	{
+		this->minMaxLabels.min[i] = new QLabel;
+		innerLayout->addWidget(this->minMaxLabels.min[i]);
+	}
+	for (uint8_t i = 0; i < 4; i++)
+	{
+		this->minMaxLabels.max[i] = new QLabel;
+		innerLayout->addWidget(this->minMaxLabels.max[i]);
+	}
+	updateMinMaxLabels(0, 0);
+}
+
 void TexasGUI::ImageTab::createDetailsBox(QLayout* parentLayout)
 {
 	QGroupBox* detailsBox = new QGroupBox;
@@ -550,8 +576,6 @@ void TexasGUI::ImageTab::floatVisualizationModeChanged(int i)
 {
 	FloatVisualizationMode newMode = static_cast<FloatVisualizationMode>(i);
 
-	convertFloatImageTo8Bit(this->customImgData, this->qImgFormat, this->sourceTexture, newMode);
-
 	unsigned int mipLevel = getCurrentMipLevel();
 	bool scaleMipToBase = getScaleMipToBase();
 	unsigned int arrayIndex = getCurrentArrayLayer();
@@ -573,6 +597,7 @@ void TexasGUI::ImageTab::mipLevelSpinBoxChanged(int i)
 	bool scaleMipToBase = getScaleMipToBase();
 
 	updateImage(i, arrayIndex, scaleMipToBase);
+	updateMinMaxLabels(i, arrayIndex);
 }
 
 void TexasGUI::ImageTab::mipLevelSliderChanged(int i)
@@ -590,6 +615,7 @@ void TexasGUI::ImageTab::scaleToMipChanged(int i)
 	bool scaleMipToBase = scaleMipToBaseState == Qt::Checked ? true : false;
 
 	updateImage(mipLevel, arrayIndex, scaleMipToBase);
+	updateMinMaxLabels(mipLevel, arrayIndex);
 }
 
 void TexasGUI::ImageTab::arrayLayerSpinBoxChanged(int i)
@@ -652,36 +678,43 @@ unsigned int TexasGUI::ImageTab::getCurrentArrayLayer() const
 	return arrayIndex;
 }
 
-void TexasGUI::ImageTab::updateImage(std::uint64_t mipIndex, std::uint64_t arrayIndex, bool scaleMipToBase)
+void TexasGUI::ImageTab::updateMinMaxLabels(uint8_t mipIndex, uint64_t layerIndex)
+{
+	auto& layer = this->minMaxData.mipLevels[mipIndex].layers[layerIndex];
+
+	for (uint8_t i = 0; i < 4; i++)
+	{
+		std::string text = std::to_string(i) + " " + "Min: " + std::to_string(layer.min_uint64[i]);
+		this->minMaxLabels.min[i]->setText(QString::fromStdString(text));
+		text = std::to_string(i) + " " + "Max: " + std::to_string(layer.max_uint64[i]);
+		this->minMaxLabels.max[i]->setText(QString::fromStdString(text));
+	}
+
+}
+
+void TexasGUI::ImageTab::updateImage(std::uint8_t mipIndex, std::uint64_t arrayIndex, bool scaleMipToBase)
 {
 	QImage imageToDisplay{};
 
 	Texas::Dimensions const mipDims = Texas::calculateMipDimensions(this->sourceTexture.baseDimensions(), mipIndex);
 
-	if (canRenderFormatNatively(this->sourceTexture.pixelFormat()))
-	{
-		uchar const* imgData = reinterpret_cast<uchar const*>(this->sourceTexture.layerSpan(mipIndex, arrayIndex).data());
-
-		imageToDisplay = QImage(imgData, mipDims.width, mipDims.height, toQImageFormat(this->sourceTexture.pixelFormat()));
-	}
-	else
-	{
-		uchar const* imgData = reinterpret_cast<uchar const*>(this->customImgData.data());
-
-		imageToDisplay = QImage(imgData, mipDims.width, mipDims.height, this->qImgFormat);
-	}
-
 	QPixmap tempPixMap = QPixmap::fromImage(imageToDisplay);
 
-	if (scaleMipToBase == false || mipIndex == 0)
-	{
-		
-	}
-	else
+	uint64_t imgDataMemoryOffset = Texas::calculateLayerOffset(
+		this->sourceTexture.baseDimensions(), 
+		Texas::PixelFormat::RGBA_8, mipIndex,
+		this->sourceTexture.layerCount(), 
+		arrayIndex);
+	uchar const* imgData = (uchar const*)this->customImgData.constData() + imgDataMemoryOffset;
+	imageToDisplay = QImage(imgData, mipDims.width, mipDims.height, QImage::Format::Format_RGBA8888);
+	tempPixMap = QPixmap::fromImage(imageToDisplay);
+
+	if (scaleMipToBase && mipIndex != 0)
 	{
 		// Scale the image
 		QSize size = qPow(2, mipIndex) * tempPixMap.size();
-		tempPixMap = tempPixMap.scaled(size, Qt::IgnoreAspectRatio, Qt::TransformationMode::SmoothTransformation);
+		//tempPixMap = tempPixMap.scaled(size, Qt::IgnoreAspectRatio, Qt::TransformationMode::SmoothTransformation);
+		tempPixMap = tempPixMap.scaled(size, Qt::IgnoreAspectRatio, Qt::TransformationMode::FastTransformation);
 	}
 
 	this->imgLabel->setPixmap(tempPixMap);
